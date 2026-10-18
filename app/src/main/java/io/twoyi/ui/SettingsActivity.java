@@ -26,6 +26,7 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.util.Pair;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -193,12 +194,14 @@ public class SettingsActivity extends AppCompatActivity {
                 File rootfs3rd = RomManager.get3rdRootfsFile(activity);
 
                 ContentResolver contentResolver = activity.getContentResolver();
-                try (InputStream inputStream = contentResolver.openInputStream(uri); OutputStream os = new FileOutputStream(rootfs3rd)) {
-                    byte[] buffer = new byte[1024];
+                try (InputStream inputStream = contentResolver.openInputStream(uri);
+                     OutputStream os = new BufferedOutputStream(new FileOutputStream(rootfs3rd))) {
+                    byte[] buffer = new byte[64 * 1024];
                     int count;
                     while ((count = inputStream.read(buffer)) > 0) {
                         os.write(buffer, 0, count);
                     }
+                    os.flush();
                 }
 
                 RomManager.RomInfo romInfo = RomManager.getRomInfo(rootfs3rd);

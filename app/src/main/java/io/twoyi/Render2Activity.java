@@ -19,6 +19,8 @@
 package io.twoyi;
 
 import android.Manifest;
+import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -37,6 +39,7 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -51,6 +54,11 @@ import androidx.core.content.ContextCompat;
 
 import com.cleveroad.androidmanimation.LoadingAnimationView;
 
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -76,7 +84,23 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
     private View mLoadingLayout;
     private View mBootLogView;
 
+    private View mRomMissingLayout;
+    private Button mBtnSelectRom;
+    private Button mBtnExitApp;
+
     private final AtomicBoolean mIsExtracting = new AtomicBoolean(false);
+
+    private final ActivityResultLauncher<Intent> mSelectRomLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        installRomFromUri(uri);
+                        return;
+                    }
+                }
+                showRomMissingUi();
+            });
 
     private final ActivityResultLauncher<String[]> mHalPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
@@ -176,6 +200,17 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
         mLoadingText = findViewById(R.id.loadingText);
         mBootLogView = findViewById(R.id.bootlog);
 
+        mRomMissingLayout = findViewById(R.id.romMissingLayout);
+        mBtnSelectRom = findViewById(R.id.btnSelectRom);
+        mBtnExitApp = findViewById(R.id.btnExitApp);
+
+        if (mBtnSelectRom != null) {
+            mBtnSelectRom.setOnClickListener(v -> launchRomPicker());
+        }
+        if (mBtnExitApp != null) {
+            mBtnExitApp.setOnClickListener(v -> finish());
+        }
+
         mLoadingLayout.setVisibility(View.VISIBLE);
         mLoadingView.startAnimation();
 
@@ -251,10 +286,17 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
 
     private void bootSystem() {
         boolean romExist = RomManager.romExist(this);
-        boolean factoryRomUpdated = RomManager.needsUpgrade(this);
+        boolean hasAssetRom = RomManager.hasAssetRom(this);
         boolean forceInstall = AppKV.getBooleanConfig(getApplicationContext(), AppKV.FORCE_ROM_BE_RE_INSTALL, false);
         boolean use3rdRom = AppKV.getBooleanConfig(getApplicationContext(), AppKV.SHOULD_USE_THIRD_PARTY_ROM, false);
 
+        if ((!romExist || (forceInstall && !use3rdRom)) && !hasAssetRom) {
+            Log.i(TAG, "No ROM installed and no ROM in assets. Prompting user to select ROM from storage.");
+            runOnUiThread(this::showRomMissingDialog);
+            return;
+        }
+
+        boolean factoryRomUpdated = RomManager.needsUpgrade(this);
         boolean shouldExtractRom = !romExist || forceInstall || (!use3rdRom && factoryRomUpdated);
 
         if (shouldExtractRom) {
@@ -278,6 +320,146 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
             mRootView.addView(mSurfaceView, 0);
             showBootingProcedure();
         }
+    }
+
+    private void launchRomPicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                "application/x-7z-compressed",
+                "application/x-compressed",
+                "application/octet-stream",
+                "application/zip",
+                "*/*"
+        });
+        try {
+            mSelectRomLauncher.launch(intent);
+        } catch (ActivityNotFoundException e) {
+            try {
+                Intent fallback = new Intent(Intent.ACTION_GET_CONTENT);
+                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                fallback.setType("*/*");
+                mSelectRomLauncher.launch(fallback);
+            } catch (Throwable t) {
+                Toast.makeText(this, R.string.rom_copy_failed, Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void showRomMissingDialog() {
+        if (isFinishing() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && isDestroyed())) {
+            return;
+        }
+        showRomMissingUi();
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.rom_not_found_title)
+                .setMessage(R.string.rom_not_found_message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.btn_select_rom, (dialog, which) -> {
+                    dialog.dismiss();
+                    launchRomPicker();
+                })
+                .setNegativeButton(R.string.btn_exit, (dialog, which) -> {
+                    dialog.dismiss();
+                    finish();
+                })
+                .show();
+    }
+
+    private void showRomMissingUi() {
+        if (mLoadingView != null) {
+            mLoadingView.stopAnimation();
+        }
+        if (mLoadingLayout != null) {
+            mLoadingLayout.setVisibility(View.GONE);
+        }
+        if (mRomMissingLayout != null) {
+            mRomMissingLayout.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void installRomFromUri(Uri uri) {
+        if (mRomMissingLayout != null) {
+            mRomMissingLayout.setVisibility(View.GONE);
+        }
+        if (mLoadingLayout != null) {
+            mLoadingLayout.setVisibility(View.VISIBLE);
+        }
+        if (mLoadingView != null) {
+            mLoadingView.startAnimation();
+        }
+        if (mLoadingText != null) {
+            mLoadingText.setText(R.string.copying_rom);
+        }
+
+        new Thread(() -> {
+            File targetRom = getApplicationContext().getFileStreamPath(RomManager.ROOTFS_NAME);
+            boolean copySuccess = false;
+            try (InputStream is = getContentResolver().openInputStream(uri);
+                 OutputStream os = new BufferedOutputStream(new FileOutputStream(targetRom))) {
+                if (is != null) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int len;
+                    while ((len = is.read(buffer)) > 0) {
+                        os.write(buffer, 0, len);
+                    }
+                    os.flush();
+                    copySuccess = targetRom.exists() && targetRom.length() > 0;
+                }
+            } catch (Throwable t) {
+                Log.e(TAG, "Failed to copy ROM from URI: " + uri, t);
+            }
+
+            if (!copySuccess) {
+                runOnUiThread(() -> {
+                    Toast.makeText(Render2Activity.this, R.string.rom_copy_failed, Toast.LENGTH_LONG).show();
+                    showRomMissingUi();
+                });
+                return;
+            }
+
+            runOnUiThread(() -> {
+                if (mLoadingText != null) {
+                    mLoadingText.setText(R.string.verifying_rom);
+                }
+            });
+
+            boolean isValid = RomManager.isValidRomArchive(targetRom);
+            if (!isValid) {
+                targetRom.delete();
+                runOnUiThread(() -> {
+                    Toast.makeText(Render2Activity.this, R.string.replace_rom_invalid, Toast.LENGTH_LONG).show();
+                    showRomMissingUi();
+                });
+                return;
+            }
+
+            runOnUiThread(() -> {
+                if (mLoadingText != null) {
+                    mLoadingText.setText(R.string.extracting_tips);
+                }
+                showTipsForFirstBoot();
+            });
+
+            mIsExtracting.set(true);
+            boolean installed = RomManager.installRomFromFile(getApplicationContext(), targetRom);
+            mIsExtracting.set(false);
+
+            if (!installed) {
+                targetRom.delete();
+                runOnUiThread(() -> {
+                    Toast.makeText(Render2Activity.this, R.string.rom_extract_failed, Toast.LENGTH_LONG).show();
+                    showRomMissingUi();
+                });
+                return;
+            }
+
+            runOnUiThread(() -> {
+                mRootView.addView(mSurfaceView, 0);
+                showBootingProcedure();
+            });
+        }, "install-rom-thread").start();
     }
 
     private void showTipsForFirstBoot() {

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Twoyi</string>
+    <string name="title_settings">Configurações</string>
+    <string name="settings_key_about">Sobre</string>
+    <string name="settings_key_import_app">Importar Aplicativo</string>
+    <string name="settings_import_summary">Importar apps do sistema principal</string>
+    <string name="settings_key_replace_rom">Substituir ROM</string>
+    <string name="settings_replace_rom_summary">Inicializar o Twoyi com uma ROM personalizada</string>
+    <string name="replace_rom_invalid">O arquivo não é uma ROM válida do Twoyi :(</string>
+    <string name="settings_key_factory_reset">Restaurar Padrão</string>
+    <string name="settings_factory_reset_summary">Reiniciar o Twoyi com a ROM interna (dados serão mantidos)</string>
+    <string name="settings_key_manage_files">Gerenciador de Arquivos</string>
+    <string name="settings_export_summary">Importar/Exportar arquivos no Twoyi</string>
+    <string name="settings_key_shutdown">Desligar</string>
+    <string name="settings_key_reboot">Reiniciar</string>
+    <string name="permission_dialog_title">Permissões Necessárias</string>
+    <string name="permission_dialog_message">O Twoyi precisa de permissões para virtualizar câmera, gravação de áudio e notificações no sistema convidado.</string>
+    <string name="permission_grant">Conceder</string>
+    <string name="permission_cancel">Pular</string>
+    <string name="permission_settings_title">Permissões nas Configurações</string>
+    <string name="permission_settings_message">Permissões necessárias foram negadas. Ative Câmera e Microfone nas configurações do app para usar os recursos virtuais.</string>
+    <string name="permission_go_settings">Abrir Configurações</string>
+    <string name="rom_not_found_title">ROM Não Encontrada</string>
+    <string name="rom_not_found_message">O Twoyi necessita de uma imagem de ROM (rootfs.7z) para inicializar o sistema virtualizado. Nenhuma ROM foi encontrada em assets. Por favor, selecione um arquivo de ROM (.7z) no armazenamento do dispositivo.</string>
+    <string name="btn_select_rom">Selecionar Arquivo de ROM (.7z)</string>
+    <string name="btn_exit">Sair</string>
+    <string name="copying_rom">Copiando arquivo de ROM do armazenamento…</string>
+    <string name="verifying_rom">Verificando arquivo de ROM…</string>
+    <string name="rom_copy_failed">Falha ao ler o arquivo de ROM selecionado.</string>
+    <string name="rom_extract_failed">Falha ao extrair a ROM. Verifique se o arquivo .7z é válido.</string>
+</resources>

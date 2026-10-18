@@ -50,4 +50,64 @@
 
     </RelativeLayout>
 
+    <LinearLayout
+        android:id="@+id/romMissingLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#121212"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/romMissingIcon"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:contentDescription="@string/rom_not_found_title"
+            android:src="@drawable/ic_rom_file" />
+
+        <TextView
+            android:id="@+id/romMissingTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/rom_not_found_title"
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/romMissingMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="28dp"
+            android:gravity="center"
+            android:text="@string/rom_not_found_message"
+            android:textColor="#B0BEC5"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnSelectRom"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:text="@string/btn_select_rom"
+            android:textColor="@color/white" />
+
+        <Button
+            android:id="@+id/btnExitApp"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="48dp"
+            android:text="@string/btn_exit"
+            android:textColor="#90CAF9" />
+
+    </LinearLayout>
+
 </FrameLayout>

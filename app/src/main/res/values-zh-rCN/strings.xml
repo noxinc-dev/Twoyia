@@ -80,4 +80,12 @@
     <string name="permission_settings_title">在设置中授权</string>
     <string name="permission_settings_message">部分必要权限已被拒绝。请在系统应用设置中开启相机和麦克风权限以使用虚拟化硬件功能。</string>
     <string name="permission_go_settings">去设置</string>
+    <string name="rom_not_found_title">未找到 ROM</string>
+    <string name="rom_not_found_message">两仪需要 ROM 镜像文件 (rootfs.7z) 才能初始化虚拟系统。未在 assets 中检测到内置 ROM。请从设备存储中选择 ROM 镜像文件 (.7z)。</string>
+    <string name="btn_select_rom">选择 ROM 文件 (.7z)</string>
+    <string name="btn_exit">退出</string>
+    <string name="copying_rom">正在从存储复制 ROM 文件…</string>
+    <string name="verifying_rom">正在校验 ROM 压缩包…</string>
+    <string name="rom_copy_failed">读取选择的 ROM 文件失败。</string>
+    <string name="rom_extract_failed">解压 ROM 失败，请确认是否为有效的 rootfs .7z 压缩包。</string>
 </resources>

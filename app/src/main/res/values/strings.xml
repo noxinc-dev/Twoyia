@@ -82,4 +82,12 @@
     <string name="permission_settings_title">Permissions in Settings</string>
     <string name="permission_settings_message">Some required permissions were permanently denied. Please allow Camera and Microphone in App Settings to enable virtualization features.</string>
     <string name="permission_go_settings">Open Settings</string>
+    <string name="rom_not_found_title">ROM Not Found</string>
+    <string name="rom_not_found_message">Twoyi requires a ROM image file (rootfs.7z) to initialize the virtual system. No internal ROM was found in assets. Please select a ROM file (.7z) from your device storage.</string>
+    <string name="btn_select_rom">Select ROM File (.7z)</string>
+    <string name="btn_exit">Exit</string>
+    <string name="copying_rom">Copying ROM from storage…</string>
+    <string name="verifying_rom">Verifying ROM archive…</string>
+    <string name="rom_copy_failed">Failed to read the selected ROM file.</string>
+    <string name="rom_extract_failed">Failed to extract the ROM. Please ensure it is a valid rootfs .7z archive.</string>
 </resources>

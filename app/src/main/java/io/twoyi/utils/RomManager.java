@@ -50,7 +50,7 @@ public final class RomManager {
 
     private static final String TAG = "RomManager";
 
-    private static final String ROOTFS_NAME = "rootfs.7z";
+    public static final String ROOTFS_NAME = "rootfs.7z";
 
     private static final String ROM_INFO_FILE = "rom.ini";
 
@@ -141,12 +141,33 @@ public final class RomManager {
 
     public static final RomInfo DEFAULT_ROM_INFO = new RomInfo();
 
+    public static boolean hasAssetRom(Context context) {
+        if (context == null) return false;
+        try {
+            String[] list = context.getAssets().list("");
+            if (list != null) {
+                for (String file : list) {
+                    if (ROOTFS_NAME.equals(file)) {
+                        try (InputStream is = context.getAssets().open(ROOTFS_NAME)) {
+                            return is != null && (is.available() > 0 || is.read() != -1);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     public static boolean romExist(Context context) {
         File initFile = new File(getRootfsDir(context), "init");
         return initFile.exists();
     }
 
     public static boolean needsUpgrade(Context context) {
+        if (!hasAssetRom(context)) {
+            return false;
+        }
         RomInfo currentRomInfo = getCurrentRomInfo(context);
         Log.i(TAG, "current rom: " + currentRomInfo);
         if (currentRomInfo.equals(DEFAULT_ROM_INFO)) {
@@ -173,12 +194,16 @@ public final class RomManager {
     }
 
     public static RomInfo getRomInfo(File rom) {
+        if (rom == null || !rom.exists()) {
+            return DEFAULT_ROM_INFO;
+        }
         try (SevenZFile zFile = new SevenZFile(rom)) {
 
             SevenZArchiveEntry entry;
 
             while ((entry = zFile.getNextEntry()) != null) {
-                if (entry.getName().equals("rootfs/rom.ini")) {
+                String name = entry.getName();
+                if ("rootfs/rom.ini".equals(name) || "rom.ini".equals(name) || (name != null && name.endsWith("/rom.ini"))) {
                     byte[] content = new byte[(int) entry.getSize()];
                     zFile.read(content, 0, content.length);
                     ByteArrayInputStream bais = new ByteArrayInputStream(content);
@@ -187,6 +212,60 @@ public final class RomManager {
             }
         } catch (Throwable ignored) {}
         return DEFAULT_ROM_INFO;
+    }
+
+    public static boolean isValidRomArchive(File rom) {
+        if (rom == null || !rom.exists() || rom.length() == 0) {
+            return false;
+        }
+        try (SevenZFile zFile = new SevenZFile(rom)) {
+            SevenZArchiveEntry entry;
+            boolean hasEntries = false;
+            while ((entry = zFile.getNextEntry()) != null) {
+                hasEntries = true;
+                String name = entry.getName();
+                if (name != null && (name.contains("init") || name.contains("system") || name.contains("rom.ini"))) {
+                    return true;
+                }
+            }
+            return hasEntries;
+        } catch (Throwable e) {
+            Log.e(TAG, "isValidRomArchive failed", e);
+            return false;
+        }
+    }
+
+    public static boolean installRomFromFile(Context context, File romFile) {
+        if (romFile == null || !romFile.exists()) {
+            return false;
+        }
+
+        removeSystemPartition(context);
+        removeVendorPartition(context);
+
+        int ret = extractRootfs(context, romFile);
+        Log.i(TAG, "extractRootfs from file ret: " + ret);
+
+        File rootfsDir = getRootfsDir(context);
+        File initInRootfs = new File(rootfsDir, "init");
+        File initInDataDir = new File(context.getDataDir(), "init");
+        if (!initInRootfs.exists() && initInDataDir.exists()) {
+            ensureDir(rootfsDir);
+            File system = new File(context.getDataDir(), "system");
+            File vendor = new File(context.getDataDir(), "vendor");
+            File romIni = new File(context.getDataDir(), "rom.ini");
+            initInDataDir.renameTo(initInRootfs);
+            if (system.exists()) system.renameTo(new File(rootfsDir, "system"));
+            if (vendor.exists()) vendor.renameTo(new File(rootfsDir, "vendor"));
+            if (romIni.exists()) romIni.renameTo(new File(rootfsDir, "rom.ini"));
+        }
+
+        if (ret == 0 && romExist(context)) {
+            initRootfs(context);
+            AppKV.setBooleanConfig(context, AppKV.FORCE_ROM_BE_RE_INSTALL, false);
+            return true;
+        }
+        return false;
     }
 
     public static RomInfo getRomInfoFromAssets(Context context) {
@@ -274,6 +353,10 @@ public final class RomManager {
     }
 
     public static boolean extractRootfsInAssets(Context context) {
+        if (!hasAssetRom(context)) {
+            Log.w(TAG, "extractRootfsInAssets: no asset ROM found in assets/" + ROOTFS_NAME);
+            return false;
+        }
 
         // read assets
         long t1 = SystemClock.elapsedRealtime();
