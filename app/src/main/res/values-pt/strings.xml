@@ -29,4 +29,9 @@
     <string name="verifying_rom">Verificando arquivo de ROM…</string>
     <string name="rom_copy_failed">Falha ao ler o arquivo de ROM selecionado.</string>
     <string name="rom_extract_failed">Falha ao extrair a ROM. Verifique se o arquivo .7z é válido.</string>
+    <string name="boot_timeout_dialog_title">Tempo Limite no Boot</string>
+    <string name="boot_timeout_dialog_message">O Twoyi excedeu o limite de 5 minutos tentando inicializar. A ROM atual pode ser incompatível ou estar corrompida. Deseja selecionar outra ROM, tentar novamente ou sair?</string>
+    <string name="btn_select_another_rom">Selecionar Outra ROM</string>
+    <string name="btn_retry_boot">Tentar Novamente</string>
+    <string name="rom_install_success_rebooting">ROM instalada com sucesso! Reiniciando…</string>
 </resources>

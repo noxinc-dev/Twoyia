@@ -88,4 +88,9 @@
     <string name="verifying_rom">正在校验 ROM 压缩包…</string>
     <string name="rom_copy_failed">读取选择的 ROM 文件失败。</string>
     <string name="rom_extract_failed">解压 ROM 失败，请确认是否为有效的 rootfs .7z 压缩包。</string>
+    <string name="boot_timeout_dialog_title">启动超时</string>
+    <string name="boot_timeout_dialog_message">两仪启动超过5分钟仍未完成，当前ROM可能不兼容或损坏。是否选择其他ROM、重新尝试启动或退出？</string>
+    <string name="btn_select_another_rom">选择其他ROM</string>
+    <string name="btn_retry_boot">重新启动</string>
+    <string name="rom_install_success_rebooting">ROM安装成功，正在重启…</string>
 </resources>

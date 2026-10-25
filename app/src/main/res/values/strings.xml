@@ -90,4 +90,9 @@
     <string name="verifying_rom">Verifying ROM archive…</string>
     <string name="rom_copy_failed">Failed to read the selected ROM file.</string>
     <string name="rom_extract_failed">Failed to extract the ROM. Please ensure it is a valid rootfs .7z archive.</string>
+    <string name="boot_timeout_dialog_title">Boot Timeout</string>
+    <string name="boot_timeout_dialog_message">Twoyi took longer than 5 minutes to boot. The current ROM may be incompatible or corrupted. Would you like to select another ROM, try again, or exit?</string>
+    <string name="btn_select_another_rom">Select Another ROM</string>
+    <string name="btn_retry_boot">Try Again</string>
+    <string name="rom_install_success_rebooting">ROM installed successfully! Rebooting…</string>
 </resources>

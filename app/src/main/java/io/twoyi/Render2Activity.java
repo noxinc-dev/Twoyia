@@ -99,7 +99,10 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
                         return;
                     }
                 }
-                showRomMissingUi();
+                if (mRomMissingLayout != null && mRomMissingLayout.getVisibility() == View.VISIBLE) {
+                    return;
+                }
+                showBootTimeoutUi();
             });
 
     private final ActivityResultLauncher<String[]> mHalPermissionLauncher =
@@ -375,8 +378,69 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
             mLoadingLayout.setVisibility(View.GONE);
         }
         if (mRomMissingLayout != null) {
+            TextView titleView = findViewById(R.id.romMissingTitle);
+            TextView msgView = findViewById(R.id.romMissingMessage);
+            if (titleView != null) {
+                titleView.setText(R.string.rom_not_found_title);
+            }
+            if (msgView != null) {
+                msgView.setText(R.string.rom_not_found_message);
+            }
+            if (mBtnSelectRom != null) {
+                mBtnSelectRom.setText(R.string.btn_select_rom);
+            }
             mRomMissingLayout.setVisibility(View.VISIBLE);
         }
+    }
+
+    private void showBootTimeoutUi() {
+        if (mLoadingView != null) {
+            mLoadingView.stopAnimation();
+        }
+        if (mLoadingLayout != null) {
+            mLoadingLayout.setVisibility(View.GONE);
+        }
+        if (mRomMissingLayout != null) {
+            TextView titleView = findViewById(R.id.romMissingTitle);
+            TextView msgView = findViewById(R.id.romMissingMessage);
+            if (titleView != null) {
+                titleView.setText(R.string.boot_timeout_dialog_title);
+            }
+            if (msgView != null) {
+                msgView.setText(R.string.boot_timeout_dialog_message);
+            }
+            if (mBtnSelectRom != null) {
+                mBtnSelectRom.setText(R.string.btn_select_another_rom);
+            }
+            mRomMissingLayout.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void showBootTimeoutDialog() {
+        if (isFinishing() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && isDestroyed())) {
+            return;
+        }
+
+        showBootTimeoutUi();
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.boot_timeout_dialog_title)
+                .setMessage(R.string.boot_timeout_dialog_message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.btn_select_another_rom, (dialog, which) -> {
+                    dialog.dismiss();
+                    launchRomPicker();
+                })
+                .setNeutralButton(R.string.btn_retry_boot, (dialog, which) -> {
+                    dialog.dismiss();
+                    RomManager.reboot(Render2Activity.this);
+                })
+                .setNegativeButton(R.string.btn_exit, (dialog, which) -> {
+                    dialog.dismiss();
+                    finish();
+                    System.exit(0);
+                })
+                .show();
     }
 
     private void installRomFromUri(Uri uri) {
@@ -390,7 +454,11 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
             mLoadingView.startAnimation();
         }
         if (mLoadingText != null) {
+            mLoadingText.setVisibility(View.VISIBLE);
             mLoadingText.setText(R.string.copying_rom);
+        }
+        if (mBootLogView != null) {
+            mBootLogView.setVisibility(View.GONE);
         }
 
         new Thread(() -> {
@@ -414,7 +482,7 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
             if (!copySuccess) {
                 runOnUiThread(() -> {
                     Toast.makeText(Render2Activity.this, R.string.rom_copy_failed, Toast.LENGTH_LONG).show();
-                    showRomMissingUi();
+                    showBootTimeoutUi();
                 });
                 return;
             }
@@ -430,7 +498,7 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
                 targetRom.delete();
                 runOnUiThread(() -> {
                     Toast.makeText(Render2Activity.this, R.string.replace_rom_invalid, Toast.LENGTH_LONG).show();
-                    showRomMissingUi();
+                    showBootTimeoutUi();
                 });
                 return;
             }
@@ -450,14 +518,21 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
                 targetRom.delete();
                 runOnUiThread(() -> {
                     Toast.makeText(Render2Activity.this, R.string.rom_extract_failed, Toast.LENGTH_LONG).show();
-                    showRomMissingUi();
+                    showBootTimeoutUi();
                 });
                 return;
             }
 
             runOnUiThread(() -> {
-                mRootView.addView(mSurfaceView, 0);
-                showBootingProcedure();
+                Toast.makeText(Render2Activity.this, R.string.rom_install_success_rebooting, Toast.LENGTH_SHORT).show();
+                if (mSurfaceView != null && mSurfaceView.getParent() != null) {
+                    mRootView.postDelayed(() -> RomManager.reboot(Render2Activity.this), 1200);
+                } else {
+                    if (mSurfaceView != null && mSurfaceView.getParent() == null) {
+                        mRootView.addView(mSurfaceView, 0);
+                    }
+                    showBootingProcedure();
+                }
             });
         }, "install-rom-thread").start();
     }
@@ -492,18 +567,12 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
             if (true) {
                 boolean success = false;
                 try {
-                    success = TwoyiStatusManager.getInstance().waitBoot(15, TimeUnit.SECONDS);
+                    success = TwoyiStatusManager.getInstance().waitBoot(5, TimeUnit.MINUTES);
                 } catch (Throwable ignored) {
                 }
 
                 if (!success) {
-                    runOnUiThread(() -> Toast.makeText(getApplicationContext(), R.string.boot_failed, Toast.LENGTH_SHORT).show());
-
-                    // waiting for track
-                    SystemClock.sleep(3000);
-
-                    finish();
-                    System.exit(0);
+                    runOnUiThread(this::showBootTimeoutDialog);
                     return;
                 }
             }
