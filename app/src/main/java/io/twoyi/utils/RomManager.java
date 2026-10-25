@@ -179,8 +179,105 @@ public final class RomManager {
         return romInfoFromAssets.code > currentRomInfo.code;
     }
 
+    public static boolean hasAssetRomIni(Context context) {
+        if (context == null) return false;
+        try {
+            String[] list = context.getAssets().list("");
+            if (list != null) {
+                for (String file : list) {
+                    if ("rom.ini".equalsIgnoreCase(file)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    public static boolean hasRomIni(Context context) {
+        if (context == null) return false;
+        if (hasAssetRomIni(context)) {
+            return true;
+        }
+        File rootfsDir = getRootfsDir(context);
+        File ini1 = new File(rootfsDir, ROM_INFO_FILE);
+        if (ini1.exists() && ini1.length() > 0) return true;
+        File ini2 = new File(rootfsDir, "ROM.ini");
+        if (ini2.exists() && ini2.length() > 0) return true;
+        File ini3 = new File(context.getFilesDir(), ROM_INFO_FILE);
+        if (ini3.exists() && ini3.length() > 0) return true;
+        File ini4 = new File(context.getDataDir(), ROM_INFO_FILE);
+        if (ini4.exists() && ini4.length() > 0) return true;
+        return false;
+    }
+
+    public static boolean saveRomIni(Context context, InputStream inputStream) {
+        if (context == null || inputStream == null) return false;
+        try {
+            File rootfsDir = getRootfsDir(context);
+            ensureDir(rootfsDir);
+            byte[] buffer = new byte[64 * 1024];
+            int count;
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            while ((count = inputStream.read(buffer)) > 0) {
+                baos.write(buffer, 0, count);
+            }
+            byte[] bytes = baos.toByteArray();
+            if (bytes.length == 0) return false;
+
+            File target1 = new File(rootfsDir, ROM_INFO_FILE);
+            File target2 = new File(rootfsDir, "ROM.ini");
+            File target3 = new File(context.getFilesDir(), ROM_INFO_FILE);
+            File target4 = new File(context.getDataDir(), ROM_INFO_FILE);
+
+            try (OutputStream os1 = new FileOutputStream(target1)) { os1.write(bytes); }
+            try (OutputStream os2 = new FileOutputStream(target2)) { os2.write(bytes); }
+            try (OutputStream os3 = new FileOutputStream(target3)) { os3.write(bytes); }
+            try (OutputStream os4 = new FileOutputStream(target4)) { os4.write(bytes); }
+            return true;
+        } catch (Throwable t) {
+            Log.e(TAG, "saveRomIni failed", t);
+            return false;
+        }
+    }
+
+    public static void createDefaultRomIniIfMissing(Context context) {
+        if (!hasRomIni(context)) {
+            File rootfsDir = getRootfsDir(context);
+            ensureDir(rootfsDir);
+            File iniFile = new File(rootfsDir, ROM_INFO_FILE);
+            File iniFileUpper = new File(rootfsDir, "ROM.ini");
+            File filesIni = new File(context.getFilesDir(), ROM_INFO_FILE);
+            Properties prop = new Properties();
+            prop.setProperty("author", "custom");
+            prop.setProperty("version", "1.0");
+            prop.setProperty("code", "1");
+            prop.setProperty("desc", "Custom ROM configuration");
+            prop.setProperty("md5", "");
+            try (Writer writer = new FileWriter(iniFile)) {
+                prop.store(writer, "Generated default ROM.ini");
+            } catch (IOException ignored) {}
+            try (Writer writer = new FileWriter(iniFileUpper)) {
+                prop.store(writer, "Generated default ROM.ini");
+            } catch (IOException ignored) {}
+            try (Writer writer = new FileWriter(filesIni)) {
+                prop.store(writer, "Generated default ROM.ini");
+            } catch (IOException ignored) {}
+        }
+    }
+
     public static RomInfo getCurrentRomInfo(Context context) {
         File infoFile = new File(getRootfsDir(context), ROM_INFO_FILE);
+        if (!infoFile.exists()) {
+            infoFile = new File(getRootfsDir(context), "ROM.ini");
+        }
+        if (!infoFile.exists()) {
+            infoFile = new File(context.getFilesDir(), ROM_INFO_FILE);
+        }
+        if (!infoFile.exists()) {
+            infoFile = new File(context.getDataDir(), ROM_INFO_FILE);
+        }
         try (FileInputStream inputStream = new FileInputStream(infoFile)) {
             return getRomInfo(inputStream);
         } catch (Throwable e) {
@@ -203,7 +300,8 @@ public final class RomManager {
 
             while ((entry = zFile.getNextEntry()) != null) {
                 String name = entry.getName();
-                if ("rootfs/rom.ini".equals(name) || "rom.ini".equals(name) || (name != null && name.endsWith("/rom.ini"))) {
+                if ("rootfs/rom.ini".equalsIgnoreCase(name) || "rom.ini".equalsIgnoreCase(name)
+                        || (name != null && name.toLowerCase(Locale.US).endsWith("/rom.ini"))) {
                     byte[] content = new byte[(int) entry.getSize()];
                     zFile.read(content, 0, content.length);
                     ByteArrayInputStream bais = new ByteArrayInputStream(content);
@@ -261,6 +359,28 @@ public final class RomManager {
         }
 
         if (ret == 0 && romExist(context)) {
+            File savedIni = new File(context.getFilesDir(), ROM_INFO_FILE);
+            File rootfsIni = new File(rootfsDir, ROM_INFO_FILE);
+            if (!rootfsIni.exists()) {
+                File rootfsIniUpper = new File(rootfsDir, "ROM.ini");
+                if (rootfsIniUpper.exists()) {
+                    try {
+                        Files.copy(rootfsIniUpper.toPath(), rootfsIni.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    } catch (IOException ignored) {}
+                } else if (savedIni.exists()) {
+                    try {
+                        Files.copy(savedIni.toPath(), rootfsIni.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        Files.copy(savedIni.toPath(), rootfsIniUpper.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    } catch (IOException ignored) {}
+                } else if (hasAssetRomIni(context)) {
+                    try (InputStream is = context.getAssets().open(ROM_INFO_FILE);
+                         OutputStream os = new FileOutputStream(rootfsIni)) {
+                        byte[] buf = new byte[4096];
+                        int c;
+                        while ((c = is.read(buf)) > 0) os.write(buf, 0, c);
+                    } catch (Throwable ignored) {}
+                }
+            }
             initRootfs(context);
             AppKV.setBooleanConfig(context, AppKV.FORCE_ROM_BE_RE_INSTALL, false);
             return true;
@@ -427,11 +547,20 @@ public final class RomManager {
             prop.load(in);
 
             RomInfo info = new RomInfo();
-            info.author = prop.getProperty("author");
-            info.code = Long.parseLong(prop.getProperty("code"));
-            info.version = prop.getProperty("version");
+            info.author = prop.getProperty("author", DEFAULT_INFO);
+            String codeStr = prop.getProperty("code");
+            if (codeStr != null) {
+                try {
+                    info.code = Long.parseLong(codeStr.trim());
+                } catch (NumberFormatException ignored) {
+                    info.code = 1;
+                }
+            } else {
+                info.code = 1;
+            }
+            info.version = prop.getProperty("version", DEFAULT_INFO);
             info.desc = prop.getProperty("desc", DEFAULT_INFO);
-            info.md5 = prop.getProperty("md5");
+            info.md5 = prop.getProperty("md5", "");
             return info;
         } catch (Throwable e) {
             Log.e(TAG, "read rom info err", e);

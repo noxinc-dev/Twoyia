@@ -95,4 +95,16 @@
     <string name="btn_select_another_rom">Select Another ROM</string>
     <string name="btn_retry_boot">Try Again</string>
     <string name="rom_install_success_rebooting">ROM installed successfully! Rebooting…</string>
+    <string name="btn_select_rom_ini">Select ROM.ini</string>
+    <string name="rom_ini_not_found_title">ROM.ini Not Found</string>
+    <string name="rom_ini_not_found_message">The ROM configuration file (ROM.ini) was not found. Please select your ROM.ini file from device storage, or continue with default settings.</string>
+    <string name="btn_continue_default">Continue with Defaults</string>
+    <string name="rom_ini_select_prompt">ROM installed! However, ROM.ini was not found. Would you like to select a ROM.ini file now?</string>
+    <string name="rom_ini_installed_success">ROM.ini loaded successfully!</string>
+    <string name="rom_ini_read_failed">Failed to read the selected ROM.ini file.</string>
+    <string name="settings_key_select_rom_ini">Select ROM.ini</string>
+    <string name="settings_select_rom_ini_summary">Load or replace the ROM configuration file (ROM.ini)</string>
+    <string name="rom_status_info">ROM: %1$s | ROM.ini: %2$s</string>
+    <string name="status_present">Present</string>
+    <string name="status_missing">Missing</string>
 </resources>

@@ -45,6 +45,7 @@ import io.twoyi.utils.UIHelper;
 public class SettingsActivity extends AppCompatActivity {
 
     private static final int REQUEST_GET_FILE = 1000;
+    private static final int REQUEST_GET_ROM_INI = 1001;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -97,6 +98,7 @@ public class SettingsActivity extends AppCompatActivity {
             Preference shutdown = findPreference(R.string.settings_key_shutdown);
             Preference reboot = findPreference(R.string.settings_key_reboot);
             Preference replaceRom = findPreference(R.string.settings_key_replace_rom);
+            Preference selectRomIni = findPreference(R.string.settings_key_select_rom_ini);
             Preference factoryReset = findPreference(R.string.settings_key_factory_reset);
 
             Preference about = findPreference(R.string.settings_key_about);
@@ -143,6 +145,21 @@ public class SettingsActivity extends AppCompatActivity {
                 return true;
             });
 
+            if (selectRomIni != null) {
+                selectRomIni.setOnPreferenceClickListener(preference -> {
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false);
+                    intent.setType("*/*");
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    try {
+                        startActivityForResult(intent, REQUEST_GET_ROM_INI);
+                    } catch (Throwable ignored) {
+                        Toast.makeText(getContext(), "Error", Toast.LENGTH_SHORT).show();
+                    }
+                    return true;
+                });
+            }
+
             factoryReset.setOnPreferenceClickListener(preference -> {
                 UIHelper.getDialogBuilder(getActivity())
                         .setTitle(android.R.string.dialog_alert_title)
@@ -170,20 +187,59 @@ public class SettingsActivity extends AppCompatActivity {
         public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
             super.onActivityResult(requestCode, resultCode, data);
 
-            if (!(requestCode == REQUEST_GET_FILE && resultCode == Activity.RESULT_OK)) {
-                return;
-            }
-
-            if (data == null) {
+            if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
                 return;
             }
 
             Uri uri = data.getData();
-            if (uri == null) {
+            Activity activity = getActivity();
+            if (activity == null) {
                 return;
             }
 
-            Activity activity = getActivity();
+            if (requestCode == REQUEST_GET_ROM_INI) {
+                ProgressDialog dialog = UIHelper.getProgressDialog(activity);
+                dialog.setCancelable(false);
+                dialog.show();
+
+                UIHelper.defer().when(() -> {
+                    try (InputStream is = activity.getContentResolver().openInputStream(uri)) {
+                        if (is != null) {
+                            return RomManager.saveRomIni(activity, is);
+                        }
+                    } catch (Throwable e) {
+                        e.printStackTrace();
+                    }
+                    return false;
+                }).done(success -> {
+                    UIHelper.dismiss(dialog);
+                    if (Boolean.TRUE.equals(success)) {
+                        Toast.makeText(activity, R.string.rom_ini_installed_success, Toast.LENGTH_SHORT).show();
+                        RomManager.RomInfo info = RomManager.getCurrentRomInfo(activity);
+                        if (info != null && info.isValid()) {
+                            UIHelper.getDialogBuilder(activity)
+                                    .setTitle(R.string.rom_ini_installed_success)
+                                    .setMessage(getString(R.string.replace_rom_confirm_message, info.author, info.version, info.desc))
+                                    .setPositiveButton(R.string.settings_key_reboot, (d, which) -> {
+                                        d.dismiss();
+                                        RomManager.reboot(activity);
+                                    })
+                                    .setNegativeButton(android.R.string.ok, (d, which) -> d.dismiss())
+                                    .show();
+                        }
+                    } else {
+                        Toast.makeText(activity, R.string.rom_ini_read_failed, Toast.LENGTH_SHORT).show();
+                    }
+                }).fail(result -> activity.runOnUiThread(() -> {
+                    UIHelper.dismiss(dialog);
+                    Toast.makeText(activity, R.string.rom_ini_read_failed, Toast.LENGTH_SHORT).show();
+                }));
+                return;
+            }
+
+            if (requestCode != REQUEST_GET_FILE) {
+                return;
+            }
             ProgressDialog dialog = UIHelper.getProgressDialog(activity);
             dialog.setCancelable(false);
             dialog.show();

@@ -99,6 +99,28 @@
             android:textColor="@color/white" />
 
         <Button
+            android:id="@+id/btnSelectRomIni"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:text="@string/btn_select_rom_ini"
+            android:textColor="#80D8FF" />
+
+        <TextView
+            android:id="@+id/romStatusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:textColor="#90A4AE"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btnExitApp"
             style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"

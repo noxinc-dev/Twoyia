@@ -86,6 +86,8 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
 
     private View mRomMissingLayout;
     private Button mBtnSelectRom;
+    private Button mBtnSelectRomIni;
+    private TextView mRomStatusText;
     private Button mBtnExitApp;
 
     private final AtomicBoolean mIsExtracting = new AtomicBoolean(false);
@@ -100,9 +102,22 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
                     }
                 }
                 if (mRomMissingLayout != null && mRomMissingLayout.getVisibility() == View.VISIBLE) {
+                    updateRomMissingStatus();
                     return;
                 }
                 showBootTimeoutUi();
+            });
+
+    private final ActivityResultLauncher<Intent> mSelectRomIniLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        saveRomIniFromUri(uri);
+                        return;
+                    }
+                }
+                updateRomMissingStatus();
             });
 
     private final ActivityResultLauncher<String[]> mHalPermissionLauncher =
@@ -205,10 +220,15 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
 
         mRomMissingLayout = findViewById(R.id.romMissingLayout);
         mBtnSelectRom = findViewById(R.id.btnSelectRom);
+        mBtnSelectRomIni = findViewById(R.id.btnSelectRomIni);
+        mRomStatusText = findViewById(R.id.romStatusText);
         mBtnExitApp = findViewById(R.id.btnExitApp);
 
         if (mBtnSelectRom != null) {
             mBtnSelectRom.setOnClickListener(v -> launchRomPicker());
+        }
+        if (mBtnSelectRomIni != null) {
+            mBtnSelectRomIni.setOnClickListener(v -> launchRomIniPicker());
         }
         if (mBtnExitApp != null) {
             mBtnExitApp.setOnClickListener(v -> finish());
@@ -290,6 +310,7 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
     private void bootSystem() {
         boolean romExist = RomManager.romExist(this);
         boolean hasAssetRom = RomManager.hasAssetRom(this);
+        boolean hasRomIni = RomManager.hasRomIni(this);
         boolean forceInstall = AppKV.getBooleanConfig(getApplicationContext(), AppKV.FORCE_ROM_BE_RE_INSTALL, false);
         boolean use3rdRom = AppKV.getBooleanConfig(getApplicationContext(), AppKV.SHOULD_USE_THIRD_PARTY_ROM, false);
 
@@ -299,6 +320,19 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
             return;
         }
 
+        if (romExist && !hasRomIni) {
+            Log.i(TAG, "ROM installed but ROM.ini missing. Prompting user to select ROM.ini or continue.");
+            runOnUiThread(this::showRomIniMissingDialog);
+            return;
+        }
+
+        proceedWithBoot();
+    }
+
+    private void proceedWithBoot() {
+        boolean romExist = RomManager.romExist(this);
+        boolean forceInstall = AppKV.getBooleanConfig(getApplicationContext(), AppKV.FORCE_ROM_BE_RE_INSTALL, false);
+        boolean use3rdRom = AppKV.getBooleanConfig(getApplicationContext(), AppKV.SHOULD_USE_THIRD_PARTY_ROM, false);
         boolean factoryRomUpdated = RomManager.needsUpgrade(this);
         boolean shouldExtractRom = !romExist || forceInstall || (!use3rdRom && factoryRomUpdated);
 
@@ -350,6 +384,96 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
         }
     }
 
+    private void launchRomIniPicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                "text/plain",
+                "text/*",
+                "application/octet-stream",
+                "*/*"
+        });
+        try {
+            mSelectRomIniLauncher.launch(intent);
+        } catch (ActivityNotFoundException e) {
+            try {
+                Intent fallback = new Intent(Intent.ACTION_GET_CONTENT);
+                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                fallback.setType("*/*");
+                mSelectRomIniLauncher.launch(fallback);
+            } catch (Throwable t) {
+                Toast.makeText(this, R.string.rom_ini_read_failed, Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void saveRomIniFromUri(Uri uri) {
+        new Thread(() -> {
+            boolean success = false;
+            try (InputStream is = getContentResolver().openInputStream(uri)) {
+                if (is != null) {
+                    success = RomManager.saveRomIni(getApplicationContext(), is);
+                }
+            } catch (Throwable t) {
+                Log.e(TAG, "Failed to read ROM.ini from URI: " + uri, t);
+            }
+
+            final boolean saved = success;
+            runOnUiThread(() -> {
+                if (saved) {
+                    Toast.makeText(Render2Activity.this, R.string.rom_ini_installed_success, Toast.LENGTH_SHORT).show();
+                    updateRomMissingStatus();
+                    if (RomManager.romExist(Render2Activity.this)) {
+                        proceedWithBoot();
+                    } else {
+                        showRomMissingUi();
+                    }
+                } else {
+                    Toast.makeText(Render2Activity.this, R.string.rom_ini_read_failed, Toast.LENGTH_LONG).show();
+                    updateRomMissingStatus();
+                }
+            });
+        }, "save-rom-ini").start();
+    }
+
+    private void showRomIniMissingDialog() {
+        if (isFinishing() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && isDestroyed())) {
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.rom_ini_not_found_title)
+                .setMessage(R.string.rom_ini_not_found_message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.btn_select_rom_ini, (dialog, which) -> {
+                    dialog.dismiss();
+                    launchRomIniPicker();
+                })
+                .setNeutralButton(R.string.btn_continue_default, (dialog, which) -> {
+                    dialog.dismiss();
+                    RomManager.createDefaultRomIniIfMissing(getApplicationContext());
+                    proceedWithBoot();
+                })
+                .setNegativeButton(R.string.btn_exit, (dialog, which) -> {
+                    dialog.dismiss();
+                    finish();
+                    System.exit(0);
+                })
+                .show();
+    }
+
+    private void updateRomMissingStatus() {
+        if (mRomStatusText != null) {
+            boolean hasRom = RomManager.romExist(this) || RomManager.hasAssetRom(this);
+            boolean hasIni = RomManager.hasRomIni(this);
+            String romStatus = hasRom ? getString(R.string.status_present) : getString(R.string.status_missing);
+            String iniStatus = hasIni ? getString(R.string.status_present) : getString(R.string.status_missing);
+            mRomStatusText.setText(getString(R.string.rom_status_info, romStatus, iniStatus));
+            mRomStatusText.setVisibility(View.VISIBLE);
+        }
+    }
+
     private void showRomMissingDialog() {
         if (isFinishing() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && isDestroyed())) {
             return;
@@ -362,6 +486,10 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
                 .setPositiveButton(R.string.btn_select_rom, (dialog, which) -> {
                     dialog.dismiss();
                     launchRomPicker();
+                })
+                .setNeutralButton(R.string.btn_select_rom_ini, (dialog, which) -> {
+                    dialog.dismiss();
+                    launchRomIniPicker();
                 })
                 .setNegativeButton(R.string.btn_exit, (dialog, which) -> {
                     dialog.dismiss();
@@ -389,6 +517,10 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
             if (mBtnSelectRom != null) {
                 mBtnSelectRom.setText(R.string.btn_select_rom);
             }
+            if (mBtnSelectRomIni != null) {
+                mBtnSelectRomIni.setVisibility(View.VISIBLE);
+            }
+            updateRomMissingStatus();
             mRomMissingLayout.setVisibility(View.VISIBLE);
         }
     }
@@ -412,6 +544,10 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
             if (mBtnSelectRom != null) {
                 mBtnSelectRom.setText(R.string.btn_select_another_rom);
             }
+            if (mBtnSelectRomIni != null) {
+                mBtnSelectRomIni.setVisibility(View.VISIBLE);
+            }
+            updateRomMissingStatus();
             mRomMissingLayout.setVisibility(View.VISIBLE);
         }
     }
@@ -431,14 +567,13 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
                     dialog.dismiss();
                     launchRomPicker();
                 })
-                .setNeutralButton(R.string.btn_retry_boot, (dialog, which) -> {
+                .setNeutralButton(R.string.btn_select_rom_ini, (dialog, which) -> {
+                    dialog.dismiss();
+                    launchRomIniPicker();
+                })
+                .setNegativeButton(R.string.btn_retry_boot, (dialog, which) -> {
                     dialog.dismiss();
                     RomManager.reboot(Render2Activity.this);
-                })
-                .setNegativeButton(R.string.btn_exit, (dialog, which) -> {
-                    dialog.dismiss();
-                    finish();
-                    System.exit(0);
                 })
                 .show();
     }
@@ -523,18 +658,40 @@ public class Render2Activity extends AppCompatActivity implements View.OnTouchLi
                 return;
             }
 
-            runOnUiThread(() -> {
-                Toast.makeText(Render2Activity.this, R.string.rom_install_success_rebooting, Toast.LENGTH_SHORT).show();
-                if (mSurfaceView != null && mSurfaceView.getParent() != null) {
-                    mRootView.postDelayed(() -> RomManager.reboot(Render2Activity.this), 1200);
-                } else {
-                    if (mSurfaceView != null && mSurfaceView.getParent() == null) {
-                        mRootView.addView(mSurfaceView, 0);
-                    }
-                    showBootingProcedure();
-                }
-            });
+            boolean hasRomIni = RomManager.hasRomIni(getApplicationContext());
+            if (!hasRomIni) {
+                runOnUiThread(() -> {
+                    new AlertDialog.Builder(Render2Activity.this)
+                            .setTitle(R.string.rom_ini_not_found_title)
+                            .setMessage(R.string.rom_ini_select_prompt)
+                            .setCancelable(false)
+                            .setPositiveButton(R.string.btn_select_rom_ini, (dialog, which) -> {
+                                dialog.dismiss();
+                                launchRomIniPicker();
+                            })
+                            .setNeutralButton(R.string.btn_continue_default, (dialog, which) -> {
+                                dialog.dismiss();
+                                RomManager.createDefaultRomIniIfMissing(getApplicationContext());
+                                finishRomInstallAndReboot();
+                            })
+                            .show();
+                });
+            } else {
+                runOnUiThread(this::finishRomInstallAndReboot);
+            }
         }, "install-rom-thread").start();
+    }
+
+    private void finishRomInstallAndReboot() {
+        Toast.makeText(Render2Activity.this, R.string.rom_install_success_rebooting, Toast.LENGTH_SHORT).show();
+        if (mSurfaceView != null && mSurfaceView.getParent() != null) {
+            mRootView.postDelayed(() -> RomManager.reboot(Render2Activity.this), 1200);
+        } else {
+            if (mSurfaceView != null && mSurfaceView.getParent() == null) {
+                mRootView.addView(mSurfaceView, 0);
+            }
+            showBootingProcedure();
+        }
     }
 
     private void showTipsForFirstBoot() {
